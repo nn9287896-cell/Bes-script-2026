@@ -1,5 +1,5 @@
 -- ============================================================
--- NIGHTSAKEN v63.3 - FIX CHANCE AIMBOT & 360 SPIN
+-- NIGHTSAKEN v63.4 - THAY ESP BẰNG OBSIDIAN STYLE ESP
 -- ============================================================
 
 local Players      = game:GetService("Players")
@@ -403,687 +403,369 @@ task.spawn(function()
     end
 end)
 
-local function isInSurvivors(m) return survivorsFolder and m.Parent == survivorsFolder end
-local function isInKillers(m) return killersFolder and m.Parent == killersFolder end
-local function clearKillerESP() for _,o in ipairs(espFolder:GetChildren()) do if o.Name:sub(1,11) == "KillGlow_" then o:Destroy() end end end
-local function clearSurvivorESP() for _,o in ipairs(espFolder:GetChildren()) do if o.Name:sub(1,12) == "SurvGlow_" then o:Destroy() end end end
-local function clearGeneratorESP() for _,o in ipairs(espFolder:GetChildren()) do if o.Name:sub(1,8) == "GenGlow_" then o:Destroy() end end end
-local function clearItemESP() for _,o in ipairs(espFolder:GetChildren()) do if o.Name:sub(1,9) == "ItemGlow_" then o:Destroy() end end end
-
-local function applyHL(hl, fillColor, outlineFallback)
-    if not hl then return end
-    hl.FillColor = fillColor
-    hl.OutlineColor = CONFIG.ESPOutlineColor or outlineFallback
-    hl.FillTransparency = CONFIG.ESPFillTransparency
-    hl.OutlineTransparency = CONFIG.ESPOutlineTransparency
+-- ==========================================
+-- NEW OBSIDIAN STYLE ESP SYSTEM
+-- ==========================================
+local EspLib = {}
+local MapFolder = nil
+local mapObj = Workspace:FindFirstChild("Map")
+if mapObj then MapFolder = mapObj:FindFirstChild("Ingame") end
+local DummyNames = {
+    "PizzaDeliveryRig", "Mafiaso1", "Mafiaso2", "Builderman", "Elliot",
+    "ShedletskyCORRUPT", "ChancecORRUPT", "ChanceCORRUPT", "Mafia1", "Mafia2",
+    "Mafia3", "Mafia4", "Mafia5", "Mafia6", "Mafia7", "Mafia8", "Mafia9",
+    "GreenGuy", "RedGuy", "BlueGuy", "PurpleGuy", "PinkGuy", "YellowGuy",
+    "OrangeGuy", "GreyGuy"
+}
+local ObjectESPData = {}
+local PlayerESPData = {}
+local ESPSettings = {
+    generatorESP = false, itemESP = false, pizzaEsp = false, pizzaDeliveryEsp = false,
+    zombieEsp = false, taphTripwireEsp = false, tripMineEsp = false, twoTimeRespawnEsp = false,
+    graffitiEsp = false,
+    generatorColor = Color3.fromRGB(200, 100, 200), itemColor = Color3.fromRGB(200, 200, 0),
+    pizzaColor = Color3.fromRGB(200, 150, 0), pizzaDeliveryColor = Color3.fromRGB(200, 100, 100),
+    zombieColor = Color3.fromRGB(200, 100, 100), taphTripwireColor = Color3.fromRGB(100, 0, 100),
+    tripMineColor = Color3.fromRGB(255, 0, 255), twoTimeRespawnColor = Color3.fromRGB(0, 150, 200),
+    graffitiColor = Color3.fromRGB(255, 255, 255),
+    limitDistance = false, maxDistance = 150,
+    killerESP = false, playerESP = false, killerNameESP = true, survivorNameESP = true,
+    killerHealthESP = true, survivorHealthESP = true, killerSkinESP = false, survivorSkinESP = false,
+    killerColor = Color3.fromRGB(255, 100, 100), survivorColor = Color3.fromRGB(100, 255, 100),
+    killerFillTransparency = 0.7, killerOutlineTransparency = 0.3,
+    survivorFillTransparency = 0.7, survivorOutlineTransparency = 0.3,
+    generatorTracers = false, itemTracers = false, pizzaTracers = false, pizzaDeliveryTracers = false,
+    zombieTracers = false, taphTripwireTracers = false, tripMineTracers = false, twoTimeRespawnTracers = false,
+    killerTracers = false, survivorTracers = false,
+    showGeneratorName = true, showItemName = true, showPizzaName = true, showPizzaDeliveryName = true,
+    showZombieName = true, showTaphTripwireName = true, showTripMineName = true, showTwoTimeRespawnName = true,
+    showGraffitiName = true,
+    azureGroundBulbESP = false,
+    azureVineESP = false,
+    azureGroundBulbColor = Color3.fromRGB(0, 255, 200),
+    azureVineColor = Color3.fromRGB(200, 0, 255),
+}
+local function IsRagdoll(model)
+    local ragdolls = Workspace:FindFirstChild("Ragdolls")
+    return ragdolls and (model:IsDescendantOf(ragdolls) or model.Parent == ragdolls)
 end
-
-local function makePlayerESP(player, isKiller)
-    if player == LocalPlayer then return end
-    local prefix = isKiller and "KillGlow_" or "SurvGlow_"
-    local bbPrefix = isKiller and "Kill_BB_" or "Surv_BB_"
-    local fillColor = isKiller and Color3.fromRGB(255,0,0) or Color3.fromRGB(0,255,0)
-    local outlineColor = isKiller and Color3.fromRGB(100,0,0) or Color3.fromRGB(0,100,0)
-    local function setup(character)
-        if not character then return end
-        local conn
-        conn = RunService.RenderStepped:Connect(function()
-            local hum = character:FindFirstChildOfClass("Humanoid")
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-            local active = (isKiller and CONFIG.ESPKiller) or (not isKiller and CONFIG.ESPSurvivor)
-            if not character:IsDescendantOf(workspace) or not active or (hum and hum.Health <= 0) then
-                local g = espFolder:FindFirstChild(prefix..player.Name); if g then g:Destroy() end
-                if hrp and hrp:FindFirstChild(bbPrefix..player.Name) then hrp[bbPrefix..player.Name]:Destroy() end
-                if conn then conn:Disconnect() end
-                return
-            end
-            local check = isKiller and isInKillers(character) or isInSurvivors(character)
-            if check then
-                local hl = espFolder:FindFirstChild(prefix..player.Name)
-                if not hl then
-                    hl = Instance.new("Highlight"); hl.Name = prefix..player.Name; hl.Adornee = character
-                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent = espFolder
-                end
-                applyHL(hl, fillColor, outlineColor)
-                if hrp then
-                    local bb = hrp:FindFirstChild(bbPrefix..player.Name)
-                    if not bb then
-                        bb = Instance.new("BillboardGui"); bb.Name = bbPrefix..player.Name
-                        bb.AlwaysOnTop = true; bb.ZIndexBehavior = Enum.ZIndexBehavior.Global; bb.Adornee = hrp; bb.Parent = hrp
-                    end
-                    bb.StudsOffset = Vector3.new(0, CONFIG.ESPStudsOffsetY, 0)
-                    bb.Size = UDim2.new(0, 100, 0, CONFIG.ESPBillboardHeight)
-                    local ln = bb:FindFirstChild("NameLabel")
-                    if not ln then
-                        ln = Instance.new("TextLabel"); ln.Name = "NameLabel"; ln.Size = UDim2.new(1,0,0.6,0)
-                        ln.BackgroundTransparency = 1; ln.Font = Enum.Font.SourceSansBold
-                        ln.TextStrokeTransparency = 0; ln.TextColor3 = fillColor; ln.ZIndex = 100; ln.Parent = bb
-                    end
-                    local lh = bb:FindFirstChild("HPLabel")
-                    if not lh then
-                        lh = Instance.new("TextLabel"); lh.Name = "HPLabel"; lh.Size = UDim2.new(1,0,0.4,0); lh.Position = UDim2.new(0,0,0.6,0)
-                        lh.BackgroundTransparency = 1; lh.Font = Enum.Font.SourceSansBold
-                        lh.TextStrokeTransparency = 0; lh.TextColor3 = fillColor; lh.ZIndex = 100; lh.Parent = bb
-                    end
-                    ln.Text = CONFIG.ShowName and character.Name or ""
-                    if hum and CONFIG.ShowHP then lh.Text = tostring(math.floor(hum.Health)).." HP" end
-                    ln.TextSize = CONFIG.ESPNameSize; lh.TextSize = CONFIG.ESPInfoSize
-                end
-            else
-                local g = espFolder:FindFirstChild(prefix..player.Name); if g then g:Destroy() end
-                if hrp and hrp:FindFirstChild(bbPrefix..player.Name) then hrp[bbPrefix..player.Name]:Destroy() end
-            end
-        end)
-        table.insert(espConns, conn)
-    end
-    if player.Character then setup(player.Character) end
-    player.CharacterAdded:Connect(setup)
+local function IsSpectating(player)
+    if not player then return false end
+    local pf = Workspace:FindFirstChild("Players")
+    if not pf then return false end
+    local sp = pf:FindFirstChild("Spectating")
+    return sp and sp:FindFirstChild(player.Name) ~= nil
 end
-
-local function makeGeneratorESP(gen)
-    if not gen:IsA("Model") or gen.Name ~= "Generator" then return end
-    local main = gen:FindFirstChild("Main") or gen:WaitForChild("Main", 5)
-    if not main then return end
-    local prog = gen:FindFirstChild("Progress")
-    local done = prog and prog.Value >= 100 or false
-    if prog then prog:GetPropertyChangedSignal("Value"):Connect(function()
-        if prog.Value >= 100 then local g = espFolder:FindFirstChild("GenGlow_"..gen:GetDebugId()); if g then g:Destroy() end end
-    end) end
-    if not CONFIG.ESPGenerators or done then return end
-    local id = gen:GetDebugId(); local color = Color3.fromRGB(0,255,255)
-    local hl = espFolder:FindFirstChild("GenGlow_"..id)
-    if not hl then
-        hl = Instance.new("Highlight"); hl.Name = "GenGlow_"..id; hl.Adornee = gen
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent = espFolder
-    end
-    applyHL(hl, color, Color3.fromRGB(0,150,150))
-    if not main:FindFirstChild("Gen_BB_"..id) then
-        local bb = Instance.new("BillboardGui"); bb.Name = "Gen_BB_"..id; bb.Size = UDim2.new(0,100,0,22)
-        bb.AlwaysOnTop = true; bb.Adornee = main; bb.StudsOffset = Vector3.new(0,2.2,0); bb.Parent = main
-        local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 1
-        lbl.Font = Enum.Font.SourceSansBold; lbl.TextStrokeTransparency = 0; lbl.TextColor3 = color
-        lbl.TextSize = CONFIG.ESPInfoSize; lbl.Text = "Generator"; lbl.Parent = bb
-    end
-end
-
-local function makeItemESP(tool)
-    if not tool:IsA("Tool") then return end
-    local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
-    if not handle then return end
-    local ok, id = pcall(function() return tool:GetDebugId() end)
-    if not ok then return end
-    local isHeld = false
-    if tool.Parent then
-        if tool.Parent:FindFirstChildOfClass("Humanoid") or tool.Parent:IsA("Backpack") then isHeld = true end
-    end
-    if not CONFIG.ESPItems or isHeld then
-        local g = espFolder:FindFirstChild("ItemGlow_"..id); if g then g:Destroy() end
-        local ob = handle:FindFirstChild("Item_BB_"..id); if ob then ob:Destroy() end
-        return
-    end
-    local color = Color3.fromRGB(255,215,0)
-    local hl = espFolder:FindFirstChild("ItemGlow_"..id)
-    if not hl then
-        hl = Instance.new("Highlight"); hl.Name = "ItemGlow_"..id; hl.Adornee = tool
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent = espFolder
-    end
-    applyHL(hl, color, Color3.fromRGB(180,140,0))
-    if not handle:FindFirstChild("Item_BB_"..id) then
-        local bb = Instance.new("BillboardGui"); bb.Name = "Item_BB_"..id; bb.Size = UDim2.new(0,90,0,20)
-        bb.AlwaysOnTop = true; bb.Adornee = handle; bb.StudsOffset = Vector3.new(0,1.8,0); bb.Parent = handle
-        local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1,0,1,0); lbl.BackgroundTransparency = 1
-        lbl.Font = Enum.Font.SourceSansBold; lbl.TextStrokeTransparency = 0; lbl.TextColor3 = color
-        lbl.TextSize = CONFIG.ESPInfoSize; lbl.Text = tool.Name; lbl.Parent = bb
-    end
-end
-
-local function updateAllESPTransparency()
-    for _, obj in ipairs(espFolder:GetChildren()) do
-        if obj:IsA("Highlight") then
-            obj.FillTransparency = CONFIG.ESPFillTransparency
-            obj.OutlineTransparency = CONFIG.ESPOutlineTransparency
-            if CONFIG.ESPOutlineColor then obj.OutlineColor = CONFIG.ESPOutlineColor end
+local function GetGeneratorPart(model)
+    if not model then return nil end
+    local instances = model:FindFirstChild("Instances")
+    if instances then
+        local generator = instances:FindFirstChild("Generator")
+        if generator then
+            local cube = generator:FindFirstChild("Cube.003")
+            if cube and cube:IsA("BasePart") then return cube end
+            for _, v in ipairs(generator:GetDescendants()) do if v:IsA("BasePart") then return v end end
         end
+        for _, v in ipairs(instances:GetDescendants()) do if v:IsA("BasePart") and tostring(v.Name):lower():find("cube") then return v end end
     end
-end
-
-local function setESPSurvivor(on)
-    CONFIG.ESPSurvivor = on
-    if not on then clearSurvivorESP() else for _,p in ipairs(Players:GetPlayers()) do makePlayerESP(p, false) end end
-end
-local function setESPKiller(on)
-    CONFIG.ESPKiller = on
-    if not on then clearKillerESP() else for _,p in ipairs(Players:GetPlayers()) do makePlayerESP(p, true) end end
-end
-local function setESPGenerators(on)
-    CONFIG.ESPGenerators = on
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == "Generator" then
-            if on then makeGeneratorESP(obj)
-            else
-                local id = obj:GetDebugId(); local g = espFolder:FindFirstChild("GenGlow_"..id); if g then g:Destroy() end
-                local main = obj:FindFirstChild("Main"); if main and main:FindFirstChild("Gen_BB_"..id) then main["Gen_BB_"..id]:Destroy() end
-            end
-        end
-    end
-end
-local function setESPItems(on)
-    CONFIG.ESPItems = on
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Tool") then
-            if on then makeItemESP(obj)
-            else
-                local ok, id = pcall(function() return obj:GetDebugId() end)
-                if ok then
-                    local g = espFolder:FindFirstChild("ItemGlow_"..id); if g then g:Destroy() end
-                    local h = obj:FindFirstChild("Handle"); if h and h:FindFirstChild("Item_BB_"..id) then h["Item_BB_"..id]:Destroy() end
-                end
-            end
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if CONFIG.ESPItems then
-            pcall(function()
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("Tool") then makeItemESP(obj) end
-                end
-            end)
-        end
-    end
-end)
-
-Players.PlayerAdded:Connect(function(p)
-    if CONFIG.ESPSurvivor then makePlayerESP(p, false) end
-    if CONFIG.ESPKiller then makePlayerESP(p, true) end
-end)
-workspace.DescendantAdded:Connect(function(o)
-    if o.Name == "Generator" and CONFIG.ESPGenerators then task.wait(0.2); makeGeneratorESP(o)
-    elseif o:IsA("Tool") and CONFIG.ESPItems then task.wait(0.1); makeItemESP(o) end
-end)
-
-local function applyFullbright()
-    if not CONFIG.Fullbright then return end
-    Lighting.Brightness = 3; Lighting.ClockTime = 14
-    Lighting.Ambient = Color3.new(1,1,1); Lighting.OutdoorAmbient = Color3.new(1,1,1)
-    Lighting.FogEnd = 1e100; Lighting.GlobalShadows = false
-    for _, e in ipairs(Lighting:GetChildren()) do
-        if e:IsA("Atmosphere") or e:IsA("BloomEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("BlurEffect") or e:IsA("SunRaysEffect") or e:IsA("DepthOfFieldEffect") then e:Destroy() end
-    end
-    pcall(function()
-        local net = ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("Network", 2)
-        if net then local rf = net:FindFirstChild("RemoteFunction"); if rf then rf:InvokeServer("GetCurrentLighting") end end
-    end)
-end
-Lighting.ChildAdded:Connect(function()
-    if CONFIG.Fullbright then task.defer(function() task.wait(0.2); applyFullbright() end) end
-end)
-local function setFullbright(on) CONFIG.Fullbright = on; if on then applyFullbright() end end
-
-local function applyInfStamina()
-    pcall(function()
-        local ok, m = pcall(function() return require(ReplicatedStorage.Systems.Character.Game.Sprinting) end)
-        if not ok or not m then return end
-        if not m.DefaultsSet then pcall(function() m.Init() end) end
-        m.StaminaLoss = 0; m.StaminaGain = 999; m.MaxStamina = 999
-        m.StaminaLossDisabled = true
-        if m.Stamina and m.Stamina < 999 then m.Stamina = 999 end
-        if type(m.StaminaCap) == "number" then m.StaminaCap = 999 end
-        pcall(function() if m.__staminaChangedEvent then m.__staminaChangedEvent:Fire() end end)
-    end)
-end
-local function startInfStamina()
-    if staminaThread then return end
-    staminaThread = task.spawn(function()
-        while CONFIG.InfStamina do
-            pcall(applyInfStamina)
-            task.wait(0.3)
-        end
-        staminaThread = nil
-    end)
-end
-local function stopInfStamina()
-    if staminaThread then task.cancel(staminaThread); staminaThread = nil end
-end
-local function setInfStamina(on)
-    CONFIG.InfStamina = on
-    if on then applyInfStamina(); startInfStamina() else stopInfStamina() end
-end
-LocalPlayer.CharacterAdded:Connect(function()
-    task.delay(1.5, function()
-        if CONFIG.InfStamina then applyInfStamina(); if not staminaThread then startInfStamina() end end
-    end)
-end)
-
-local MIN_FOV = 30
-local MAX_FOV = 120
-local FOV_BIND = "NIGHTSAKEN_FOVForce"
-local FOVValue = 120
-local fovWatchConn = nil
-CONFIG.FOV = 120
-
-local function ApplyFOV()
-    local cam = workspace.CurrentCamera
-    if cam and cam.FieldOfView ~= FOVValue then
-        pcall(function() cam.FieldOfView = FOVValue end)
-    end
-end
-
-pcall(function() RunService:UnbindFromRenderStep(FOV_BIND) end)
-pcall(function()
-    RunService:BindToRenderStep(FOV_BIND, Enum.RenderPriority.Last.Value + 1, function()
-        local cam = workspace.CurrentCamera
-        if cam and cam.FieldOfView ~= FOVValue then
-            pcall(function() cam.FieldOfView = FOVValue end)
-        end
-    end)
-end)
-
-local function WatchCameraFOV(cam)
-    if fovWatchConn then pcall(function() fovWatchConn:Disconnect() end); fovWatchConn = nil end
-    if not cam then return end
-    fovWatchConn = cam:GetPropertyChangedSignal("FieldOfView"):Connect(function()
-        if cam.FieldOfView ~= FOVValue then
-            pcall(function() cam.FieldOfView = FOVValue end)
-        end
-    end)
-end
-WatchCameraFOV(workspace.CurrentCamera)
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-    WatchCameraFOV(workspace.CurrentCamera)
-    ApplyFOV()
-end)
-
-local function setFOVByPercent(percent)
-    percent = math.clamp(percent, 0, 100)
-    FOVValue = MIN_FOV + ((MAX_FOV - MIN_FOV) * (percent / 100))
-    CONFIG.FOV = FOVValue
-    ApplyFOV()
-end
-local function setFOV(value)
-    FOVValue = math.clamp(value, MIN_FOV, MAX_FOV)
-    CONFIG.FOV = FOVValue
-    ApplyFOV()
-end
-local function resetFOV()
-    FOVValue = 120
-    CONFIG.FOV = 120
-    ApplyFOV()
-end
-
-local TARGET_ANIMATION_ID = "100725497418533"
-local DASHSTAB_ANIM_ID = "89448354637442"
-local bsEnabled = false
-local bsAutoStuds = false
-local bsDetectPing = false
-local bsMoreDirect = false
-local bsMoreDirectRN = false
-local bsMoreDirectEnd = false
-local bsDistCheck = false
-local bsDistCheckStuds = 7
-local bsStartDelay = 0.05
-local bsDuration = 0.2
-local bsBehindStuds = 4
-local bsAutoStandStuds = 5.5
-local bsAutoRunStuds = 3.4
-local bsDashstabEnabled = false
-local bsDsStartDelay = 0.1
-local bsRunning = false
-local bsDoitmate = false
-local bsSpeed = nil
-
-local function refreshBsSpeed()
-    if LocalPlayer.Character then
-        local sm = LocalPlayer.Character:FindFirstChild("SpeedMultipliers")
-        if sm then bsSpeed = sm:FindFirstChild("Sprinting") end
-    end
-end
-refreshBsSpeed()
-LocalPlayer.CharacterAdded:Connect(function() task.wait(0.5); refreshBsSpeed() end)
-
-local function getFirstValidKillerAB()
-    local pf = workspace:FindFirstChild("Players")
-    if not pf then return nil end
-    local kf = pf:FindFirstChild("Killers")
-    if not kf then return nil end
-    for _, inst in ipairs(kf:GetDescendants()) do
-        if inst:IsA("Model") then
-            local hum = inst:FindFirstChildOfClass("Humanoid")
-            local hrp = inst:FindFirstChild("HumanoidRootPart")
-            if hum and hrp and hum.Health > 0 then return inst end
-        end
-    end
+    for _, v in ipairs(model:GetDescendants()) do if v:IsA("BasePart") and v.Name:lower():find("cube") then return v end end
+    for _, v in ipairs(model:GetDescendants()) do if v:IsA("BasePart") then return v end end
     return nil
 end
-
-local function getPingAB()
-    local ok, val = pcall(function() return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() end)
-    if ok and val then return val end
-    local ok2, val2 = pcall(function() return LocalPlayer:GetNetworkPing() * 1000 end)
-    if ok2 and val2 then return val2 end
-    return 20
-end
-
-local function runPlaceSequence()
-    if not bsEnabled or bsRunning then return end
-    bsRunning = true
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    task.wait(bsStartDelay)
-    if not char.Parent then bsRunning = false; return end
-    local place = Instance.new("Part")
-    place.Name = "place"; place.Size = Vector3.new(2,2,2); place.Transparency = 0
-    place.CanCollide = false; place.Anchored = true; place.Parent = char
-    local oldPP = char.PrimaryPart
-    local oldSpeed = bsSpeed and bsSpeed.Value or 16
-    if bsMoreDirect then bsMoreDirectRN = true; task.wait(0.01); bsMoreDirectRN = false end
-    local st = os.clock()
-    while os.clock() - st < bsDuration do
-        if not char.Parent or not place.Parent or not bsEnabled then break end
-        if bsSpeed then bsSpeed.Value = 0 end
-        bsDoitmate = true
-        RunService.PreRender:Wait()
-    end
-    if place and place.Parent then place:Destroy() end
-    if char and char.Parent then char.PrimaryPart = oldPP end
-    if bsSpeed then bsSpeed.Value = oldSpeed end
-    bsDoitmate = false
-    if bsMoreDirect then
-        bsMoreDirectRN = true; task.wait(0.01); bsMoreDirectEnd = true; bsMoreDirectRN = false; task.wait(0.01); bsMoreDirectEnd = false
-    end
-    bsRunning = false
-end
-
-local function runDashstabSequence()
-    if not bsDashstabEnabled or bsRunning then return end
-    bsRunning = true
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    task.wait(bsDsStartDelay)
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not char.Parent or not hrp then bsRunning = false; return end
-    local place = Instance.new("Part")
-    place.Name = "place"; place.Size = Vector3.new(2,2,2); place.Transparency = 0
-    place.CanCollide = false; place.Anchored = true; place.Parent = char
-    local oldPP = char.PrimaryPart
-    local oldSpeed = bsSpeed and bsSpeed.Value or 16
-    if bsMoreDirect then bsMoreDirectRN = true; task.wait(0.01); bsMoreDirectRN = false end
-    local st = os.clock()
-    while os.clock() - st < bsDuration do
-        if not char.Parent or not place.Parent or not bsDashstabEnabled then break end
-        if bsSpeed then bsSpeed.Value = 0 end
-        bsDoitmate = true
-        RunService.PreRender:Wait()
-    end
-    if bsSpeed then bsSpeed.Value = oldSpeed end
-    bsDoitmate = false
-    if bsMoreDirect then
-        bsMoreDirectRN = true; task.wait(0.001); bsMoreDirectEnd = true; bsMoreDirectRN = false; task.wait(0.001); bsMoreDirectEnd = false
-    end
-    if place and place.Parent then place:Destroy() end
-    if char and char.Parent then char.PrimaryPart = oldPP end
-    bsRunning = false
-end
-
-pcall(function()
-    local NetworkModuleAB = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"))
-    local CharReplicationAB = require(ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Player"):WaitForChild("Game"):WaitForChild("CharacterReplication"))
-    if hookfunction then
-        local oldFire
-        oldFire = hookfunction(NetworkModuleAB.FireServerConnection, function(self, connectionName, eventType, ...)
-            local args = {...}
-            if connectionName == "UpdateCharacterPosition" then
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                local killer = getFirstValidKillerAB()
-                if killer and hrp then
-                    local kHrp = killer:FindFirstChild("HumanoidRootPart")
-                    if kHrp then
-                        local tCF = kHrp.CFrame * CFrame.new(0, 0, bsBehindStuds)
-                        local tDir = hrp.CFrame * CFrame.new(0, -90000, 0)
-                        local tEnd = hrp.CFrame * CFrame.new(0, 0, 0)
-                        if bsMoreDirectRN then
-                            args[1] = CharReplicationAB.Serialize(tDir, hrp.AssemblyLinearVelocity)
-                        elseif bsMoreDirectEnd then
-                            args[1] = CharReplicationAB.Serialize(tEnd, hrp.AssemblyLinearVelocity)
-                        elseif bsDoitmate then
-                            args[1] = CharReplicationAB.Serialize(tCF, hrp.AssemblyLinearVelocity)
-                        end
-                    end
-                end
-            end
-            return oldFire(self, connectionName, eventType, unpack(args))
-        end)
-    end
-end)
-
-local function checkDistAB(h1, h2, range)
-    if not h1 or not h2 then return false end
-    return (h1.Position - h2.Position).Magnitude <= range
-end
-
-local function hookCharAB(character)
-    local hum = character:WaitForChild("Humanoid")
-    local animator = hum:FindFirstChild("Animator")
-    if not animator then return end
-    animator.AnimationPlayed:Connect(function(track)
-        if not track or not track.Animation then return end
-        local killer = getFirstValidKillerAB()
-        if not killer then return end
-        local id = tostring(track.Animation.AnimationId or ""):gsub("%D", "")
-        if (id == TARGET_ANIMATION_ID or id == "106086955212611") and bsEnabled then
-            if bsDistCheck then
-                if not checkDistAB(character.HumanoidRootPart, killer.HumanoidRootPart, bsDistCheckStuds) then return end
-            end
-            task.spawn(runPlaceSequence)
-        elseif (id == DASHSTAB_ANIM_ID or id == "107640065977686") and bsDashstabEnabled then
-            if bsDistCheck then
-                if not checkDistAB(character.HumanoidRootPart, killer.HumanoidRootPart, bsDistCheckStuds) then return end
-            end
-            task.spawn(runDashstabSequence)
+local function createPlayerESP(model, color, isKiller)
+    if model:FindFirstChild("Fixsaken_Highlight") then return end
+    if IsRagdoll(model) then return end
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Fixsaken_Highlight"
+    highlight.Adornee = model
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+    highlight.FillTransparency = isKiller and ESPSettings.killerFillTransparency or ESPSettings.survivorFillTransparency
+    highlight.OutlineTransparency = isKiller and ESPSettings.killerOutlineTransparency or ESPSettings.survivorOutlineTransparency
+    highlight.Parent = model
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Fixsaken_Billboard"
+    billboard.Adornee = hrp
+    billboard.Size = UDim2.new(0, 120, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = model
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "Loading..."
+    nameLabel.Font = Enum.Font.Jura
+    nameLabel.TextColor3 = color
+    nameLabel.TextSize = 8
+    nameLabel.TextStrokeTransparency = 0.6
+    nameLabel.Parent = billboard
+    local hpLabel = Instance.new("TextLabel")
+    hpLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    hpLabel.Position = UDim2.new(0, 0, 0.4, 0)
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.Text = "HP: N/A"
+    hpLabel.Font = Enum.Font.Jura
+    hpLabel.TextColor3 = color
+    hpLabel.TextSize = 8
+    hpLabel.TextStrokeTransparency = 0.6
+    hpLabel.Parent = billboard
+    local data = { model = model, nameLabel = nameLabel, hpLabel = hpLabel, isKiller = isKiller }
+    table.insert(PlayerESPData, data)
+    local function updateText()
+        if not data.model or not data.model.Parent then return end
+        local m = data.model
+        local isK = data.isKiller
+        local displayName = m:GetAttribute("ActorDisplayName") or (isK and "KILLER" or "SURVIVOR")
+        local skinName = m:GetAttribute("SkinNameDisplay")
+        local text = displayName
+        if (isK and ESPSettings.killerSkinESP) or (not isK and ESPSettings.survivorSkinESP) then
+            if skinName and skinName ~= "" then text = text .. " | " .. skinName end
         end
-    end)
-end
-
-if LocalPlayer.Character then hookCharAB(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(hookCharAB)
-
-local lastK, lastKPos, smoothSpd = nil, nil, 0
-RunService.Heartbeat:Connect(function(dt)
-    if bsAutoStuds then
-        local killer = getFirstValidKillerAB()
-        if killer then
-            local kHrp = killer:FindFirstChild("HumanoidRootPart")
-            if kHrp then
-                local curPos = kHrp.Position
-                local rawSpd = 0
-                if lastK == killer and lastKPos then
-                    local hd = Vector3.new(curPos.X,0,curPos.Z) - Vector3.new(lastKPos.X,0,lastKPos.Z)
-                    rawSpd = hd.Magnitude / dt
-                end
-                lastK = killer; lastKPos = curPos
-                smoothSpd = smoothSpd + (rawSpd - smoothSpd) * math.min(dt*15, 1)
-                local fs = math.clamp(smoothSpd, 0, 30)
-                local sRun = bsAutoRunStuds
-                if bsDetectPing then
-                    local ping = math.max(getPingAB(), 20)
-                    sRun = bsAutoRunStuds - ((ping - 20) / 100) * 1.5
-                    sRun = math.max(sRun, 1.0)
-                end
-                local slope = (bsAutoStandStuds - sRun) / 26.0
-                bsBehindStuds = bsAutoStandStuds - (fs * slope)
-            else lastK = nil end
-        else lastK = nil; smoothSpd = 0 end
-    else lastK = nil; smoothSpd = 0 end
-end)
-
--- ==========================================
--- CHANCE MODULE LOGIC
--- ==========================================
-local autoCoinFlipThread = nil
-local function SetupAutoCoinFlip()
-    if autoCoinFlipThread then
-        task.cancel(autoCoinFlipThread)
-        autoCoinFlipThread = nil
-    end
-
-    local isChance = false
-    local charges = nil
-
-    local function startLoop()
-        if autoCoinFlipThread then
-            task.cancel(autoCoinFlipThread)
-        end
-        autoCoinFlipThread = task.spawn(function()
-            while task.wait(1.85) do
-                if CONFIG.AutoCoinFlip then
-                    if isChance then
-                        if charges and charges.Text ~= "3" then
-                            pcall(function()
-                                local re = getRemote()
-                                if re then
-                                    re:FireServer("UseActorAbility", { buffer.fromstring(string.pack("<Bi4", 3, # "CoinFlip") .. "CoinFlip") })
-                                end
-                            end)
-                        end
-                        continue
-                    end
-                end
-                break
-            end
-        end)
-    end
-
-    if CONFIG.AutoCoinFlip then
-        if LocalPlayer.Character and LocalPlayer.Character.Name == "Chance" then
-            isChance = true
-            pcall(function()
-                charges = LocalPlayer.PlayerGui.MainUI.AbilityContainer.Shoot.Charges
-            end)
-            startLoop()
-        end
-
-        LocalPlayer.CharacterAdded:Connect(function(character)
-            isChance = false
-            if autoCoinFlipThread then
-                task.cancel(autoCoinFlipThread)
-                autoCoinFlipThread = nil
-            end
-
-            if character.Name == "Chance" then
-                isChance = true
-                task.wait(2)
-                pcall(function()
-                    charges = Players:GetPlayerFromCharacter(character).PlayerGui.MainUI.AbilityContainer.Shoot.Charges
-                end)
-                startLoop()
-            end
-        end)
-    end
-end
-
-local shootConn1, shootConn2, shootConn3 = nil, nil, nil
-local function SetupShootAimHelper()
-    local animIds = {}
-    
-    pcall(function()
-        local assets = ReplicatedStorage:FindFirstChild("Assets")
-        if assets then
-            local config = require(assets.Survivors.Chance.Config)
-            if config and config.Animations then
-                table.insert(animIds, config.Animations.AimGun)
-            end
-            local chanceSkins = assets.Skins.Survivors:FindFirstChild("Chance")
-            if chanceSkins then
-                for _, child in pairs(chanceSkins:GetChildren()) do
-                    if child:FindFirstChild("Config") then
-                        local skinConfig = require(child.Config)
-                        if skinConfig and skinConfig.Animations then
-                            table.insert(animIds, skinConfig.Animations.AimGun)
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    if shootConn1 then shootConn1:Disconnect(); shootConn1 = nil end
-    if shootConn2 then shootConn2:Disconnect(); shootConn2 = nil end
-    if shootConn3 then shootConn3:Disconnect(); shootConn3 = nil end
-
-    if not CONFIG.Shoot_Aim_helper then return end
-
-    local function hookCharacter()
-        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        nameLabel.Text = text
+        local humanoid = m:FindFirstChild("Humanoid")
         if humanoid then
-            shootConn1 = humanoid.AnimationPlayed:Connect(function(track)
-                if track.Animation and table.find(animIds, track.Animation.AnimationId) then
-                    task.spawn(function()
-                        local char = LocalPlayer.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if not hrp then return end
-
-                        local target = nil
-                        local closest = math.huge
-                        for _, p in ipairs(Players:GetPlayers()) do
-                            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
-                                local d = (p.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
-                                if d < closest then closest = d; target = p.Character end
-                            end
-                        end
-
-                        if target then
-                            local startTime = tick()
-                            local originalAutoRotate = humanoid.AutoRotate
-                            humanoid.AutoRotate = false
-
-                            -- 360 Spin
-                            if CONFIG.Shoot_360_Spin then
-                                local spinThread = task.spawn(function()
-                                    while tick() - startTime < CONFIG.Shoot_Aim_helper_look_loock do
-                                        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(45), 0)
-                                        RunService.RenderStepped:Wait()
-                                    end
-                                end)
-                                task.wait(CONFIG.Shoot_Aim_helper_look_loock)
-                                if spinThread then task.cancel(spinThread) end
-                            end
-
-                            -- Aim Lock
-                            local aimThread = task.spawn(function()
-                                while tick() - startTime < CONFIG.Shoot_Aim_helper_look_loock do
-                                    if target and target.Parent and target:FindFirstChild("HumanoidRootPart") then
-                                        local tHrp = target.HumanoidRootPart
-                                        local dir = (tHrp.Position - hrp.Position).Unit
-                                        hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(dir.X, 0, dir.Z))
-                                        
-                                        if CONFIG.Shoot_Aim_helper_method == "HumanoidRoot Lock + Camera Lock" then
-                                            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, tHrp.Position)
-                                        end
-                                    end
-                                    RunService.RenderStepped:Wait()
-                                end
-                            end)
-                            
-                            task.wait(CONFIG.Shoot_Aim_helper_look_loock)
-                            if aimThread then task.cancel(aimThread) end
-                            humanoid.AutoRotate = originalAutoRotate
-                        end
-                    end)
-                end
-            end)
+            hpLabel.Text = string.format("HP: %d/%d", math.floor(humanoid.Health), math.floor(humanoid.MaxHealth))
+        end
+        if highlight and highlight.Parent then
+            if isK then
+                highlight.FillTransparency = ESPSettings.killerFillTransparency
+                highlight.OutlineTransparency = ESPSettings.killerOutlineTransparency
+            else
+                highlight.FillTransparency = ESPSettings.survivorFillTransparency
+                highlight.OutlineTransparency = ESPSettings.survivorOutlineTransparency
+            end
         end
     end
-
-    hookCharacter()
-    shootConn2 = LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1)
-        hookCharacter()
+    updateText()
+    model:GetAttributeChangedSignal("ActorDisplayName"):Connect(updateText)
+    model:GetAttributeChangedSignal("SkinNameDisplay"):Connect(updateText)
+    local humanoid = model:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid:GetPropertyChangedSignal("Health"):Connect(updateText)
+        humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(updateText)
+    end
+end
+local function removePlayerESP(model)
+    for i = #PlayerESPData, 1, -1 do if PlayerESPData[i].model == model then table.remove(PlayerESPData, i) end end
+    pcall(function()
+        if model:FindFirstChild("Fixsaken_Highlight") then model.Fixsaken_Highlight:Destroy() end
+        if model:FindFirstChild("Fixsaken_Billboard") then model.Fixsaken_Billboard:Destroy() end
     end)
-    shootConn3 = LocalPlayer.CharacterRemoving:Connect(function()
-        if shootConn1 then shootConn1:Disconnect(); shootConn1 = nil end
+end
+local function CreateObjectESP(model, color, isGenerator, isItem, isPizza, isPizzaDelivery, isZombie, isTaph, isTripMine, isRespawn, isGraffiti, displayText)
+    if not model then return end
+    if model:FindFirstChild("TAOWARE_Highlight") then return end
+    if isGenerator and model:FindFirstChild("Progress") and model.Progress.Value == 100 then return end
+    if IsRagdoll(model) then return end
+    if ESPSettings.limitDistance then
+        local rootPart = model:IsA("BasePart") and model or model:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local distance = (Camera.CFrame.Position - rootPart.Position).Magnitude
+            if distance > ESPSettings.maxDistance then return end
+        end
+    end
+    local targetPart
+    if isGenerator then targetPart = GetGeneratorPart(model)
+    elseif isItem then targetPart = model:FindFirstChild("ItemRoot")
+    elseif isPizza then targetPart = model:IsA("BasePart") and model or model:FindFirstChildWhichIsA("BasePart", true)
+    elseif isPizzaDelivery then targetPart = model:IsA("BasePart") and model or model:FindFirstChildWhichIsA("BasePart", true)
+    elseif isZombie then targetPart = model:IsA("BasePart") and model or model:FindFirstChildWhichIsA("BasePart", true)
+    elseif isTaph then targetPart = model:IsA("Model") and (GetGeneratorPart(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)) or model
+    elseif isTripMine then targetPart = model:IsA("Model") and (GetGeneratorPart(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)) or model
+    elseif isRespawn then targetPart = model:IsA("Model") and (GetGeneratorPart(model) or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)) or model
+    elseif isGraffiti then targetPart = model:IsA("BasePart") and model or model:FindFirstChildWhichIsA("BasePart", true)
+    else return end
+    if not targetPart then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "TAOWARE_Highlight"
+    highlight.Adornee = model
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0.3
+    highlight.Parent = model
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "TAOWARE_Billboard"
+    billboard.Adornee = targetPart
+    billboard.Size = UDim2.new(0, 120, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = model
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    if displayText then
+        textLabel.Text = displayText
+    else
+        local typeAttr = model:GetAttribute("Type")
+        if typeAttr then
+            textLabel.Text = typeAttr
+        else
+            textLabel.Text = model.Name
+        end
+    end
+    textLabel.Font = Enum.Font.Jura
+    textLabel.TextColor3 = color
+    textLabel.TextSize = 8
+    textLabel.TextStrokeTransparency = 0.6
+    textLabel.Parent = billboard
+    local espData = {model = model, highlight = highlight, billboard = billboard}
+    table.insert(ObjectESPData, espData)
+end
+local function RemoveObjectESP(model)
+    if not model then return end
+    for i = #ObjectESPData, 1, -1 do if ObjectESPData[i].model == model then table.remove(ObjectESPData, i) end end
+    pcall(function()
+        if model:FindFirstChild("TAOWARE_Highlight") then model.TAOWARE_Highlight:Destroy() end
+        if model:FindFirstChild("TAOWARE_Billboard") then model.TAOWARE_Billboard:Destroy() end
     end)
+end
+local function UpdateESP()
+    local pf = Workspace:FindFirstChild("Players")
+    if pf then
+        local killersFolder = pf:FindFirstChild("Killers")
+        local survivorsFolder = pf:FindFirstChild("Survivors")
+        if killersFolder then
+            for _, killer in ipairs(killersFolder:GetChildren()) do
+                if killer == LocalPlayer.Character then continue end
+                if IsRagdoll(killer) then removePlayerESP(killer); continue end
+                local player = Players:GetPlayerFromCharacter(killer)
+                if not player or IsSpectating(player) then removePlayerESP(killer); continue end
+                if ESPSettings.killerESP then
+                    if not killer:FindFirstChild("Fixsaken_Highlight") then createPlayerESP(killer, ESPSettings.killerColor, true) end
+                else removePlayerESP(killer) end
+            end
+        end
+        if survivorsFolder then
+            for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+                if survivor == LocalPlayer.Character then continue end
+                if IsRagdoll(survivor) then removePlayerESP(survivor); continue end
+                local player = Players:GetPlayerFromCharacter(survivor)
+                if not player or IsSpectating(player) then removePlayerESP(survivor); continue end
+                if ESPSettings.playerESP then
+                    if not survivor:FindFirstChild("Fixsaken_Highlight") then createPlayerESP(survivor, ESPSettings.survivorColor, false) end
+                else removePlayerESP(survivor) end
+            end
+        end
+    end
+    if not MapFolder then return end
+    local ingame = MapFolder
+    if ingame:FindFirstChild("Map") then
+        for _, gen in ipairs(ingame.Map:GetChildren()) do
+            if gen:IsA("Model") and gen.Name:lower():find("generator") and gen.Name ~= "FakeGenerator" then
+                if IsRagdoll(gen) then RemoveObjectESP(gen); continue end
+                local progress = gen:FindFirstChild("Progress")
+                if ESPSettings.generatorESP and progress and progress.Value < 100 and not gen:FindFirstChild("TAOWARE_Highlight") then
+                    CreateObjectESP(gen, ESPSettings.generatorColor, true)
+                elseif not ESPSettings.generatorESP or (progress and progress.Value >= 100) then RemoveObjectESP(gen) end
+            end
+        end
+        for _, item in ipairs(ingame.Map:GetDescendants()) do
+            if item.Name == "ItemRoot" and item.Parent and item.Parent:IsA("Model") then
+                local itemModel = item.Parent
+                if ESPSettings.itemESP and not itemModel:FindFirstChild("TAOWARE_Highlight") then
+                    CreateObjectESP(itemModel, ESPSettings.itemColor, false, true)
+                elseif not ESPSettings.itemESP then RemoveObjectESP(itemModel) end
+            end
+        end
+    end
+    for _, pizza in ipairs(ingame:GetChildren()) do
+        if pizza.Name == "Pizza" and pizza:IsA("BasePart") then
+            if ESPSettings.pizzaEsp and not pizza:FindFirstChild("TAOWARE_Highlight") then
+                CreateObjectESP(pizza, ESPSettings.pizzaColor, false, false, true)
+            elseif not ESPSettings.pizzaEsp then RemoveObjectESP(pizza) end
+        end
+    end
+    for _, delivery in ipairs(ingame:GetChildren()) do
+        if delivery:IsA("Model") and table.find(DummyNames, delivery.Name) then
+            if ESPSettings.pizzaDeliveryEsp and not delivery:FindFirstChild("TAOWARE_Highlight") then
+                if delivery:FindFirstChild("HumanoidRootPart") then
+                    CreateObjectESP(delivery, ESPSettings.pizzaDeliveryColor, false, false, false, true)
+                end
+            elseif not ESPSettings.pizzaDeliveryEsp then RemoveObjectESP(delivery) end
+        end
+    end
+    for _, zombie in ipairs(ingame:GetChildren()) do
+        if zombie.Name == "1x1x1x1Zombie" and zombie:IsA("Model") then
+            if ESPSettings.zombieEsp and not zombie:FindFirstChild("TAOWARE_Highlight") then
+                if zombie:FindFirstChild("HumanoidRootPart") then
+                    CreateObjectESP(zombie, ESPSettings.zombieColor, false, false, false, false, true)
+                end
+            elseif not ESPSettings.zombieEsp then RemoveObjectESP(zombie) end
+        end
+    end
+    for _, obj in ipairs(ingame:GetChildren()) do
+        if obj.Name:match("TaphTripwire$") and obj:IsA("Model") then
+            if ESPSettings.taphTripwireEsp and not obj:FindFirstChild("TAOWARE_Highlight") then
+                CreateObjectESP(obj, ESPSettings.taphTripwireColor, false, false, false, false, false, true)
+            elseif not ESPSettings.taphTripwireEsp then RemoveObjectESP(obj) end
+        end
+        if obj.Name == "SubspaceTripmine" and obj:IsA("Model") then
+            if ESPSettings.tripMineEsp and not obj:FindFirstChild("TAOWARE_Highlight") then
+                CreateObjectESP(obj, ESPSettings.tripMineColor, false, false, false, false, false, false, true)
+            elseif not ESPSettings.tripMineEsp then RemoveObjectESP(obj) end
+        end
+        if obj.Name == "GraffitiCL" and obj:IsA("BasePart") then
+            if ESPSettings.graffitiEsp and not obj:FindFirstChild("TAOWARE_Highlight") then
+                CreateObjectESP(obj, ESPSettings.graffitiColor, false, false, false, false, false, false, false, false, true)
+            elseif not ESPSettings.graffitiEsp then RemoveObjectESP(obj) end
+        end
+    end
+    for _, obj in ipairs(ingame:GetDescendants()) do
+        if obj and obj.Name and tostring(obj.Name):lower():find("respawnlocation") then
+            local target = obj:IsA("Model") and obj or obj:IsA("BasePart") and obj or (obj:FindFirstAncestorOfClass("Model") or obj)
+            if not target or IsRagdoll(target) then continue end
+            if ESPSettings.twoTimeRespawnEsp and not target:FindFirstChild("TAOWARE_Highlight") then
+                CreateObjectESP(target, ESPSettings.twoTimeRespawnColor, false, false, false, false, false, false, false, true)
+            elseif not ESPSettings.twoTimeRespawnEsp then RemoveObjectESP(target) end
+        end
+    end
+    if MapFolder then
+        for _, obj in ipairs(MapFolder:GetDescendants()) do
+            if obj:IsA("Model") then
+                local nameLower = obj.Name:lower()
+                if nameLower == "groundbulbmodel" then
+                    if ESPSettings.azureGroundBulbESP then
+                        if not obj:FindFirstChild("TAOWARE_Highlight") then
+                            CreateObjectESP(obj, ESPSettings.azureGroundBulbColor, false, false, false, false, false, false, false, false, true, "GroundBulb")
+                        end
+                    else
+                        RemoveObjectESP(obj)
+                    end
+                elseif nameLower == "vinemodel" then
+                    if ESPSettings.azureVineESP then
+                        if not obj:FindFirstChild("TAOWARE_Highlight") then
+                            CreateObjectESP(obj, ESPSettings.azureVineColor, false, false, false, false, false, false, false, false, true, "Vine")
+                        end
+                    else
+                        RemoveObjectESP(obj)
+                    end
+                end
+            end
+        end
+    end
+end
+task.spawn(function() while task.wait(0.5) do pcall(UpdateESP) end end)
+function EspLib:GetSettings() return ESPSettings end
+function EspLib:UpdateAllPlayerText()
+    for _, d in ipairs(PlayerESPData) do
+        local m = d.model
+        local isK = d.isKiller
+        local displayName = m:GetAttribute("ActorDisplayName") or (isK and "KILLER" or "SURVIVOR")
+        local skinName = m:GetAttribute("SkinNameDisplay")
+        local text = displayName
+        if (isK and ESPSettings.killerSkinESP) or (not isK and ESPSettings.survivorSkinESP) then
+            if skinName and skinName ~= "" then text = text .. " | " .. skinName end
+        end
+        d.nameLabel.Text = text
+        local humanoid = m:FindFirstChild("Humanoid")
+        if humanoid then
+            d.hpLabel.Text = string.format("HP: %d/%d", math.floor(humanoid.Health), math.floor(humanoid.MaxHealth))
+        end
+    end
 end
 
 local Rayfield = nil
@@ -1190,30 +872,34 @@ chanceTab:CreateToggle({
     end,
 })
 
+-- Tab ESP Mới (Obsidian Style)
 local espTab = window:CreateTab({ name = "ESP", icon = 93364949241311 })
-espTab:CreateSection("Toggles")
-espTab:CreateToggle({ name = "ESP Killer", currentValue = false, callback = function(v) setESPKiller(v) end })
-espTab:CreateToggle({ name = "ESP Survivor", currentValue = false, callback = function(v) setESPSurvivor(v) end })
-espTab:CreateToggle({ name = "ESP Generator", currentValue = false, callback = function(v) setESPGenerators(v) end })
-espTab:CreateToggle({ name = "ESP Item", currentValue = false, callback = function(v) setESPItems(v) end })
 
-espTab:CreateSection("ESP Transparency")
-espTab:CreateSlider({ name = "ESP Fill Transparency", range = {0,1}, increment = 0.05, currentValue = 0.5, callback = function(v) CONFIG.ESPFillTransparency = v; updateAllESPTransparency() end })
-espTab:CreateSlider({ name = "ESP Outline Transparency", range = {0,1}, increment = 0.05, currentValue = 0, callback = function(v) CONFIG.ESPOutlineTransparency = v; updateAllESPTransparency() end })
-espTab:CreateColorPicker({ name = "ESP Outline Color", currentValue = Color3.fromRGB(0,0,0), callback = function(v) CONFIG.ESPOutlineColor = v; updateAllESPTransparency() end })
+local KillerGroup = espTab:CreateSection("Killer")
+KillerGroup:CreateToggle({ name = "Killer ESP", currentValue = ESPSettings.killerESP, callback = function(v) ESPSettings.killerESP = v end })
+KillerGroup:CreateToggle({ name = "Show Killer Name", currentValue = ESPSettings.killerNameESP, callback = function(v) ESPSettings.killerNameESP = v; EspLib:UpdateAllPlayerText() end })
+KillerGroup:CreateToggle({ name = "Show Killer Health", currentValue = ESPSettings.killerHealthESP, callback = function(v) ESPSettings.killerHealthESP = v; EspLib:UpdateAllPlayerText() end })
+KillerGroup:CreateToggle({ name = "Show Killer Skin", currentValue = ESPSettings.killerSkinESP, callback = function(v) ESPSettings.killerSkinESP = v; EspLib:UpdateAllPlayerText() end })
+KillerGroup:CreateSlider({ name = "Killer Fill Transparency", currentValue = ESPSettings.killerFillTransparency, min = 0, max = 1, rounding = 2, callback = function(v) ESPSettings.killerFillTransparency = v; EspLib:UpdateAllPlayerText() end })
+KillerGroup:CreateSlider({ name = "Killer Outline Transparency", currentValue = ESPSettings.killerOutlineTransparency, min = 0, max = 1, rounding = 2, callback = function(v) ESPSettings.killerOutlineTransparency = v; EspLib:UpdateAllPlayerText() end })
+KillerGroup:CreateColorPicker({ name = "Killer Color", currentValue = ESPSettings.killerColor, callback = function(v) ESPSettings.killerColor = v end })
 
-espTab:CreateSection("Text Options")
-espTab:CreateToggle({ name = "Show Name", currentValue = true, callback = function(v) CONFIG.ShowName = v end })
-espTab:CreateToggle({ name = "Show HP", currentValue = true, callback = function(v) CONFIG.ShowHP = v end })
-espTab:CreateSlider({ name = "Name Text Size", range = {6,20}, increment = 1, currentValue = 10, callback = function(v) CONFIG.ESPNameSize = v end })
-espTab:CreateSlider({ name = "HP Text Size", range = {6,20}, increment = 1, currentValue = 8, callback = function(v) CONFIG.ESPInfoSize = v end })
-espTab:CreateSlider({ name = "Billboard Offset Y", range = {0,10}, increment = 0.1, currentValue = 3.0, callback = function(v) CONFIG.ESPStudsOffsetY = v end })
-espTab:CreateSlider({ name = "Billboard Height", range = {10,60}, increment = 1, currentValue = 40, callback = function(v) CONFIG.ESPBillboardHeight = v end })
+local SurvivorGroup = espTab:CreateSection("Survivor")
+SurvivorGroup:CreateToggle({ name = "Survivor ESP", currentValue = ESPSettings.playerESP, callback = function(v) ESPSettings.playerESP = v end })
+SurvivorGroup:CreateToggle({ name = "Show Survivor Name", currentValue = ESPSettings.survivorNameESP, callback = function(v) ESPSettings.survivorNameESP = v; EspLib:UpdateAllPlayerText() end })
+SurvivorGroup:CreateToggle({ name = "Show Survivor Health", currentValue = ESPSettings.survivorHealthESP, callback = function(v) ESPSettings.survivorHealthESP = v; EspLib:UpdateAllPlayerText() end })
+SurvivorGroup:CreateToggle({ name = "Show Survivor Skin", currentValue = ESPSettings.survivorSkinESP, callback = function(v) ESPSettings.survivorSkinESP = v; EspLib:UpdateAllPlayerText() end })
+SurvivorGroup:CreateSlider({ name = "Survivor Fill Transparency", currentValue = ESPSettings.survivorFillTransparency, min = 0, max = 1, rounding = 2, callback = function(v) ESPSettings.survivorFillTransparency = v; EspLib:UpdateAllPlayerText() end })
+SurvivorGroup:CreateSlider({ name = "Survivor Outline Transparency", currentValue = ESPSettings.survivorOutlineTransparency, min = 0, max = 1, rounding = 2, callback = function(v) ESPSettings.survivorOutlineTransparency = v; EspLib:UpdateAllPlayerText() end })
+SurvivorGroup:CreateColorPicker({ name = "Survivor Color", currentValue = ESPSettings.survivorColor, callback = function(v) ESPSettings.survivorColor = v end })
 
-espTab:CreateSection("Actions")
-espTab:CreateButton({ name = "Clear All ESP", callback = function()
-    clearKillerESP(); clearSurvivorESP(); clearGeneratorESP(); clearItemESP()
-end })
+local ItemGroup = espTab:CreateSection("Items")
+ItemGroup:CreateToggle({ name = "Generator ESP", currentValue = ESPSettings.generatorESP, callback = function(v) ESPSettings.generatorESP = v end })
+ItemGroup:CreateColorPicker({ name = "Generator Color", currentValue = ESPSettings.generatorColor, callback = function(v) ESPSettings.generatorColor = v end })
+ItemGroup:CreateToggle({ name = "Item ESP", currentValue = ESPSettings.itemESP, callback = function(v) ESPSettings.itemESP = v end })
+ItemGroup:CreateColorPicker({ name = "Item Color", currentValue = ESPSettings.itemColor, callback = function(v) ESPSettings.itemColor = v end })
+ItemGroup:CreateToggle({ name = "Pizza ESP", currentValue = ESPSettings.pizzaEsp, callback = function(v) ESPSettings.pizzaEsp = v end })
+ItemGroup:CreateColorPicker({ name = "Pizza Color", currentValue = ESPSettings.pizzaColor, callback = function(v) ESPSettings.pizzaColor = v end })
 
 local fovTab = window:CreateTab({ name = "FOV", icon = 93364949241311 })
 fovTab:CreateSection("Camera FOV (30-120, Skidsaken Style)")
@@ -1403,4 +1089,4 @@ LocalPlayer.CharacterAdded:Connect(function()
     updateAutoBlockButtonVisibility()
 end)
 
-print("[NIGHTSAKEN-v63.3] LOADED - FIXED Chance Aimbot & 360 Spin")
+print("[NIGHTSAKEN-v63.4] LOADED - Replaced ESP with Obsidian Style")
